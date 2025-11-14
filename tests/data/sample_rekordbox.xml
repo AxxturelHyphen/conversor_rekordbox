@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DJ_PLAYLISTS Version="1.0.0">
+  <PRODUCT Name="Rekordbox" Version="6.0.0" Company="Alpha" />
+  <COLLECTION Entries="2">
+    <TRACK Location="file:///music/track1.mp3" Name="Track One" Artist="Artist A" Album="Album X" Genre="House" TotalTime="300" AverageBpm="124.0" Comments="First track" Year="2020" Rating="80" />
+    <TRACK Location="file:///music/track2.mp3" Name="Track Two" Artist="Artist B" TotalTime="250" />
+  </COLLECTION>
+  <PLAYLISTS Entries="0" />
+</DJ_PLAYLISTS>
