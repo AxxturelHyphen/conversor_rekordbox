@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conversor-rekordbox"
+version = "0.1.0"
+description = "Conversor entre bibliotecas de Rekordbox, Serato y Engine DJ"
+authors = [
+  {name = "Conversor Team"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+"conversor-rekordbox" = "conversor_rekordbox.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.urls]
+"Homepage" = "https://example.com/conversor-rekordbox"
+"Repository" = "https://example.com/conversor-rekordbox.git"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
