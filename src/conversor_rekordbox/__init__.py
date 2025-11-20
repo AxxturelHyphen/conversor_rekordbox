@@ -1,6 +1,7 @@
-"""Herramientas para convertir bibliotecas entre Rekordbox, Serato y Engine DJ."""
+"""Aplicación de conversión y descarga de audio."""
 
-from .converter import Format, convert_library
-from .models import Track
+__all__ = [
+    "__version__",
+]
 
-__all__ = ["convert_library", "Format", "Track"]
+__version__ = "1.0.0"
