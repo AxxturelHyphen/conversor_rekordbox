@@ -3,26 +3,29 @@ requires = ["setuptools>=67", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "conversor-rekordbox"
-version = "0.1.0"
-description = "Conversor entre bibliotecas de Rekordbox, Serato y Engine DJ"
+name = "conversor-audio-qt"
+version = "1.0.0"
+description = "Conversor de audio de escritorio con MP3 320 kbps, WAV y descargas de streaming"
 authors = [
   {name = "Conversor Team"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "PyQt6>=6.6",
+  "yt-dlp>=2024.4.9",
+]
 
 [project.scripts]
-"conversor-rekordbox" = "conversor_rekordbox.cli:main"
+"conversor-audio" = "conversor_rekordbox.ui.app:run"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
 
 [project.urls]
-"Homepage" = "https://example.com/conversor-rekordbox"
-"Repository" = "https://example.com/conversor-rekordbox.git"
+"Homepage" = "https://example.com/conversor-audio"
+"Repository" = "https://example.com/conversor-audio.git"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
