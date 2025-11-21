@@ -11,13 +11,15 @@ DEFAULT_PATH.parent.mkdir(parents=True, exist_ok=True)
 @dataclass
 class AppConfig:
     output_dir: str | None = None
+    ffmpeg_path: str | None = None
+    first_launch_completed: bool = False
 
     @classmethod
     def load(cls, path: Path = DEFAULT_PATH) -> "AppConfig":
         if not path.exists():
             return cls()
         data = json.loads(path.read_text(encoding="utf-8"))
-        allowed_keys = {"output_dir"}
+        allowed_keys = {"output_dir", "ffmpeg_path", "first_launch_completed"}
         filtered = {k: v for k, v in data.items() if k in allowed_keys}
         return cls(**filtered)
 

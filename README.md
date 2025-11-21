@@ -10,6 +10,7 @@ Aplicación de escritorio (Python + PyQt6) centrada en descargar pistas y playli
 - Python 3.10+
 - FFmpeg disponible en el `PATH` (para conversiones y post-procesado de descargas).
 - Dependencias de Python: `PyQt6`, `yt-dlp`.
+- Si no detecta FFmpeg, la aplicación descargará una build estática en `~/.conversor_audio/bin` la primera vez que inicias la interfaz.
 
 ## Instalación
 ```bash

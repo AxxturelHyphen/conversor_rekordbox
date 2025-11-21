@@ -69,13 +69,20 @@ class SoundCloudDownloader:
                 ),
             },
             "format": "bestaudio/best",
+            "addmetadata": True,  # Añade etiquetas ID3 con título/artista/álbum cuando estén disponibles
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",
                     "preferredcodec": "mp3",
                     "preferredquality": "320",
-                }
+                },
+                {
+                    "key": "FFmpegMetadata",
+                },
             ],
+            # Evita caracteres inválidos en Windows (p.ej. "?", ":", "*")
+            "windowsfilenames": True,
+            "outtmpl_na_placeholder": "desconocido",
             "http_headers": headers,
             "nocheckcertificate": True,
         }
