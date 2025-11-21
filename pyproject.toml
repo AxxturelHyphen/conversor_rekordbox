@@ -3,9 +3,9 @@ requires = ["setuptools>=67", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "conversor-audio-qt"
-version = "1.0.0"
-description = "Conversor de audio de escritorio con MP3 320 kbps, WAV y descargas de streaming"
+name = "soundcloud-mp3-qt"
+version = "1.1.0"
+description = "Descargador de SoundCloud a MP3 320 kbps con PyQt6"
 authors = [
   {name = "Conversor Team"}
 ]

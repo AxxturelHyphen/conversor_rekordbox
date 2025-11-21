@@ -1,248 +1,117 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
 
-from ..api.soundcloud import SoundCloudCredentials, SoundCloudDownloader
-from ..audio.conversion import AudioFormat, ConversionError, convert_file
+from ..api.soundcloud import SoundCloudDownloader
 from ..utils.config import AppConfig
 from ..utils.logger import get_logger
 
 logger = get_logger()
 
 
-@dataclass
-class QueueItem:
-    path: Path
-    target_format: AudioFormat
-    status: str = "Pendiente"
-    destination: Path | None = None
-
-
-class ConversionWorker(QtCore.QObject):
-    progressed = QtCore.pyqtSignal(Path, str)
-    finished = QtCore.pyqtSignal(Path, Path)
-    failed = QtCore.pyqtSignal(Path, str)
-
-    def __init__(self, item: QueueItem, output_dir: Path):
-        super().__init__()
-        self.item = item
-        self.output_dir = output_dir
-
-    def run(self) -> None:
-        try:
-            self.progressed.emit(self.item.path, "Convirtiendo")
-            result = convert_file(self.item.path, self.output_dir, self.item.target_format)
-            self.finished.emit(self.item.path, result.destination)
-        except ConversionError as exc:
-            self.failed.emit(self.item.path, str(exc))
-        except Exception as exc:  # pragma: no cover - seguridad adicional
-            logger.exception("Error inesperado")
-            self.failed.emit(self.item.path, str(exc))
-
-
 class MainWindow(QtWidgets.QMainWindow):
+    """Interfaz principal para descargar audio de SoundCloud en MP3 320 kbps."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Conversor de Audio 320/WAV")
-        self.resize(900, 500)
+        self.setWindowTitle("SoundCloud → MP3 320 kbps")
+        self.resize(650, 220)
+
         self.config = AppConfig.load()
-        self.queue: List[QueueItem] = []
-        self.thread_pool: list[QtCore.QThread] = []
+        self.downloader = SoundCloudDownloader()
 
         self._setup_ui()
         self._load_preferences()
 
-    # UI setup
     def _setup_ui(self) -> None:
         central = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central)
 
-        # Buttons and controls
-        controls_layout = QtWidgets.QHBoxLayout()
-        self.add_button = QtWidgets.QPushButton("Añadir archivos")
-        self.add_button.clicked.connect(self.add_files)
-        controls_layout.addWidget(self.add_button)
+        intro = QtWidgets.QLabel(
+            "Descarga pistas o playlists públicas de SoundCloud directamente en MP3 320 kbps."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
 
-        self.remove_button = QtWidgets.QPushButton("Quitar seleccionado")
-        self.remove_button.clicked.connect(self.remove_selected)
-        controls_layout.addWidget(self.remove_button)
+        form_layout = QtWidgets.QFormLayout()
+        self.url_input = QtWidgets.QLineEdit()
+        self.url_input.setPlaceholderText("https://soundcloud.com/...")
+        form_layout.addRow("Enlace de SoundCloud", self.url_input)
 
-        self.clear_button = QtWidgets.QPushButton("Limpiar lista")
-        self.clear_button.clicked.connect(self.clear_list)
-        controls_layout.addWidget(self.clear_button)
+        output_layout = QtWidgets.QHBoxLayout()
+        self.output_label = QtWidgets.QLabel()
+        self.choose_output = QtWidgets.QPushButton("Cambiar carpeta…")
+        self.choose_output.clicked.connect(self.choose_output_dir)
+        output_layout.addWidget(self.output_label, stretch=1)
+        output_layout.addWidget(self.choose_output)
+        form_layout.addRow("Guardar en", output_layout)
 
-        controls_layout.addStretch()
+        layout.addLayout(form_layout)
 
-        self.format_combo = QtWidgets.QComboBox()
-        self.format_combo.addItems(["mp3", "wav"])
-        controls_layout.addWidget(QtWidgets.QLabel("Formato de salida"))
-        controls_layout.addWidget(self.format_combo)
+        self.download_button = QtWidgets.QPushButton("Descargar en MP3 320 kbps")
+        self.download_button.clicked.connect(self.download_stream)
+        layout.addWidget(self.download_button)
 
-        self.use_source_checkbox = QtWidgets.QCheckBox("Usar carpeta de origen")
-        controls_layout.addWidget(self.use_source_checkbox)
+        self.log_box = QtWidgets.QTextEdit()
+        self.log_box.setReadOnly(True)
+        self.log_box.setPlaceholderText("El progreso y los avisos aparecerán aquí…")
+        layout.addWidget(self.log_box)
 
-        self.output_button = QtWidgets.QPushButton("Elegir carpeta de salida")
-        self.output_button.clicked.connect(self.choose_output_dir)
-        controls_layout.addWidget(self.output_button)
-
-        self.output_label = QtWidgets.QLabel("Sin carpeta seleccionada")
-        controls_layout.addWidget(self.output_label)
-
-        layout.addLayout(controls_layout)
-
-        # Table
-        self.table = QtWidgets.QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Archivo", "Ruta", "Destino", "Estado"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAcceptDrops(True)
-        self.table.dragEnterEvent = self.dragEnterEvent
-        self.table.dropEvent = self.dropEvent
-        layout.addWidget(self.table)
-
-        # SoundCloud section
-        sc_group = QtWidgets.QGroupBox("Descarga desde SoundCloud / streaming")
-        sc_layout = QtWidgets.QHBoxLayout()
-        self.sc_url = QtWidgets.QLineEdit()
-        self.sc_url.setPlaceholderText("URL pública de SoundCloud, YouTube, etc.")
-        self.sc_download_button = QtWidgets.QPushButton("Descargar a MP3 320")
-        self.sc_download_button.clicked.connect(self.download_stream)
-        sc_layout.addWidget(self.sc_url)
-        sc_layout.addWidget(self.sc_download_button)
-        sc_group.setLayout(sc_layout)
-        layout.addWidget(sc_group)
-
-        # Status bar
         self.status = QtWidgets.QStatusBar()
         self.setStatusBar(self.status)
-        self.status.showMessage("Listo")
-
-        self.convert_button = QtWidgets.QPushButton("Convertir")
-        self.convert_button.clicked.connect(self.start_conversion)
-        layout.addWidget(self.convert_button)
+        self.status.showMessage("Listo para descargar")
 
         self.setCentralWidget(central)
 
     def _load_preferences(self) -> None:
-        self.use_source_checkbox.setChecked(self.config.use_source_dir)
-        idx = self.format_combo.findText(self.config.last_format)
-        if idx >= 0:
-            self.format_combo.setCurrentIndex(idx)
-        if self.config.output_dir:
-            self.output_label.setText(self.config.output_dir)
+        output_dir = Path(self.config.output_dir) if self.config.output_dir else None
+        if not output_dir:
+            output_dir = Path.home() / "Downloads"
+        self._set_output_dir(output_dir)
 
-    # Drag & drop
-    def dragEnterEvent(self, event: QtGui.QDragEnterEvent) -> None:  # type: ignore[override]
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event: QtGui.QDropEvent) -> None:  # type: ignore[override]
-        paths = [Path(url.toLocalFile()) for url in event.mimeData().urls()]
-        self._add_to_queue(paths)
-
-    # Queue management
-    def add_files(self) -> None:
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Seleccionar archivos de audio")
-        if files:
-            self._add_to_queue([Path(f) for f in files])
-
-    def _add_to_queue(self, paths: list[Path]) -> None:
-        target_format: AudioFormat = self.format_combo.currentText()  # type: ignore[assignment]
-        for path in paths:
-            item = QueueItem(path=path, target_format=target_format)
-            self.queue.append(item)
-            self._add_table_row(item)
-        self.status.showMessage(f"{len(paths)} archivos añadidos")
-
-    def _add_table_row(self, item: QueueItem) -> None:
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(item.path.name))
-        self.table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(item.path)))
-        self.table.setItem(row, 2, QtWidgets.QTableWidgetItem("-"))
-        self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(item.status))
-
-    def remove_selected(self) -> None:
-        selected = self.table.selectionModel().selectedRows()
-        for idx in sorted((r.row() for r in selected), reverse=True):
-            self.table.removeRow(idx)
-            self.queue.pop(idx)
-
-    def clear_list(self) -> None:
-        self.queue.clear()
-        self.table.setRowCount(0)
-        self.status.showMessage("Lista limpia")
+    def _set_output_dir(self, folder: Path) -> None:
+        folder.mkdir(parents=True, exist_ok=True)
+        self.output_label.setText(str(folder))
+        self.config.output_dir = str(folder)
+        self.config.save()
 
     def choose_output_dir(self) -> None:
-        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de salida")
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de destino")
         if folder:
-            self.output_label.setText(folder)
-            self.config.output_dir = folder
-            self.config.save()
+            self._set_output_dir(Path(folder))
 
-    def start_conversion(self) -> None:
-        if not self.queue:
-            QtWidgets.QMessageBox.warning(self, "Sin archivos", "Añade archivos a la cola primero")
-            return
-
-        self.status.showMessage(f"Convirtiendo 0 de {len(self.queue)}")
-        for item in self.queue:
-            output_dir = Path(item.path.parent if self.use_source_checkbox.isChecked() else self.output_label.text())
-            thread = QtCore.QThread()
-            worker = ConversionWorker(item, output_dir)
-            worker.moveToThread(thread)
-            worker.progressed.connect(self._on_progress)
-            worker.finished.connect(self._on_finished)
-            worker.failed.connect(self._on_failed)
-            thread.started.connect(worker.run)
-            thread.start()
-            self.thread_pool.append(thread)
-
-    def _on_progress(self, path: Path, state: str) -> None:
-        self._update_status(path, state)
-
-    def _on_finished(self, path: Path, destination: Path) -> None:
-        self._update_status(path, "Completado", destination)
-        self.status.showMessage(f"Completado {path.name}")
-
-    def _on_failed(self, path: Path, error: str) -> None:
-        self._update_status(path, "Error")
-        QtWidgets.QMessageBox.critical(self, "Error", f"{path.name}: {error}")
-
-    def _update_status(self, path: Path, status: str, destination: Path | None = None) -> None:
-        for row in range(self.table.rowCount()):
-            if self.table.item(row, 1).text() == str(path):
-                self.table.item(row, 3).setText(status)
-                if destination:
-                    self.table.item(row, 2).setText(str(destination))
-                break
-
-    # Streaming download
     def download_stream(self) -> None:
-        url = self.sc_url.text().strip()
+        url = self.url_input.text().strip()
         if not url:
-            QtWidgets.QMessageBox.warning(self, "URL vacía", "Introduce un enlace de SoundCloud/YouTube")
+            QtWidgets.QMessageBox.warning(self, "URL vacía", "Introduce un enlace de SoundCloud")
+            return
+        if "soundcloud.com" not in url:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Enlace no válido",
+                "Solo se aceptan enlaces de SoundCloud (pistas o playlists públicas).",
+            )
             return
 
-        output_dir = Path(self.output_label.text()) if not self.use_source_checkbox.isChecked() and self.output_label.text() else Path.home() / "Downloads"
-        downloader = SoundCloudDownloader(SoundCloudCredentials(), output_dir)
+        output_dir = Path(self.output_label.text())
+        self.download_button.setEnabled(False)
+        self.status.showMessage("Descargando…")
+        self.log_box.append("Iniciando descarga…")
 
         def task() -> None:
             try:
-                target = downloader.download(url, output_dir, "mp3")
+                targets = self.downloader.download(url, output_dir, "mp3")
+                message = self._build_success_message(targets, output_dir)
                 QtCore.QMetaObject.invokeMethod(
                     self,
                     "_notify_download",
                     QtCore.Qt.ConnectionType.QueuedConnection,
-                    QtCore.Q_ARG(str, target.name),
-                    QtCore.Q_ARG(str, str(target.parent)),
+                    QtCore.Q_ARG(str, message),
                 )
-            except Exception as exc:  # pragma: no cover - red
+            except Exception as exc:  # pragma: no cover - seguridad adicional
                 logger.exception("Error en descarga")
                 QtCore.QMetaObject.invokeMethod(
                     self,
@@ -253,10 +122,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
         threading.Thread(target=task, daemon=True).start()
 
-    @QtCore.pyqtSlot(str, str)
-    def _notify_download(self, filename: str, folder: str) -> None:
-        QtWidgets.QMessageBox.information(self, "Descarga completa", f"Archivo guardado en {folder}/{filename}")
+    def _build_success_message(self, files: list[Path], output_dir: Path) -> str:
+        if not files:
+            return f"Descarga completada en {output_dir}"
+        if len(files) == 1:
+            return f"Descarga completada: {files[0].name}"
+        return f"Descarga completada ({len(files)} elementos) en {output_dir}"
+
+    @QtCore.pyqtSlot(str)
+    def _notify_download(self, message: str) -> None:
+        self.download_button.setEnabled(True)
+        self.status.showMessage("Descarga finalizada")
+        self.log_box.append(message)
+        QtWidgets.QMessageBox.information(self, "Descarga completa", message)
 
     @QtCore.pyqtSlot(str)
     def _notify_download_error(self, message: str) -> None:
+        self.download_button.setEnabled(True)
+        self.status.showMessage("Error en la descarga")
+        self.log_box.append(f"Error: {message}")
         QtWidgets.QMessageBox.critical(self, "Error", message)

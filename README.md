@@ -1,11 +1,10 @@
-# Conversor de audio 320 kbps / WAV
+# Descargador SoundCloud → MP3 320 kbps
 
-Aplicación de escritorio (Python + PyQt6) para convertir archivos locales a MP3 320 kbps CBR o WAV PCM, gestionar colas y descargar audio desde enlaces públicos de SoundCloud/YouTube/otros servicios compatibles con `yt-dlp`.
+Aplicación de escritorio (Python + PyQt6) centrada en descargar pistas y playlists públicas de SoundCloud directamente en MP3 a 320 kbps CBR utilizando `yt-dlp` y FFmpeg para el postprocesado.
 
 ## ¿Por qué este stack?
 - **Python + PyQt6**: ofrece una UI nativa multiplataforma sencilla de construir y distribuir.
-- **FFmpeg**: motor robusto para conversiones garantizando MP3 320 kbps CBR y WAV PCM.
-- **yt-dlp**: permite descargar audio de SoundCloud y otros servicios en MP3 320 kbps.
+- **FFmpeg + yt-dlp**: garantiza MP3 320 kbps CBR incluso cuando la fuente es AAC/Opus.
 
 ## Requisitos
 - Python 3.10+
@@ -27,11 +26,9 @@ conversor-audio
 La configuración se guarda en `~/.conversor_audio/config.json` y los logs en `~/.conversor_audio/app.log`.
 
 ## Uso
-- **Añadir archivos**: botón o arrastrar/soltar sobre la tabla.
-- **Seleccionar formato**: MP3 320 kbps CBR o WAV PCM 16-bit/44.1 kHz.
-- **Carpeta de salida**: usar carpeta de origen o elegir una personalizada.
-- **Cola**: la tabla muestra nombre, ruta, destino y estado (Pendiente, Convirtiendo, Completado, Error).
-- **Descarga de streaming**: pega una URL pública (SoundCloud, YouTube, etc.) y pulsa "Descargar a MP3 320". Usa `yt-dlp` y FFmpeg para entregar MP3 a 320 kbps.
+- **Introduce el enlace** de pista o playlist pública de SoundCloud.
+- **Elige la carpeta de destino** (por defecto `~/Downloads`).
+- Pulsa **"Descargar en MP3 320 kbps"** y espera a que termine. Las playlists se guardan en una carpeta con el nombre de la lista y los elementos numerados.
 
 ## Empaquetado
 Puedes generar un ejecutable con PyInstaller:
@@ -42,9 +39,8 @@ pyinstaller -F -w src/conversor_rekordbox/ui/app.py --name conversor-audio
 El ejecutable resultante estará en `dist/`.
 
 ## Comentarios clave del código
-- Conversión a MP3 320 kbps y WAV: `src/conversor_rekordbox/audio/conversion.py` define los comandos FFmpeg.
-- Gestión de cola e interfaz: `src/conversor_rekordbox/ui/main_window.py` controla la tabla, drag & drop y ejecución en hilos.
-- Descarga SoundCloud/streaming: `src/conversor_rekordbox/api/soundcloud.py` usa `yt-dlp` y admite credenciales para extensiones futuras.
+- Descarga SoundCloud: `src/conversor_rekordbox/api/soundcloud.py` configura `yt-dlp` para playlists y pistas en MP3 320 kbps.
+- Interfaz: `src/conversor_rekordbox/ui/main_window.py` valida enlaces de SoundCloud, permite elegir la carpeta destino y muestra el progreso.
 - Configuración y logging: `src/conversor_rekordbox/utils/config.py` y `src/conversor_rekordbox/utils/logger.py`.
 
 ## Pruebas
