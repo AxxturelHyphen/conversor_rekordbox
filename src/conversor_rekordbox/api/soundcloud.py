@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from yt_dlp import YoutubeDL
 
@@ -61,7 +61,13 @@ class SoundCloudDownloader:
             headers["Authorization"] = f"OAuth {self.credentials.oauth_token}"
 
         return {
-            "outtmpl": str(output_dir / "%(title)s.%(ext)s"),
+            "outtmpl": {
+                "default": str(output_dir / "%(title)s.%(ext)s"),
+                "pl_video": str(
+                    output_dir
+                    / "%(playlist_title)s/%(playlist_index)02d - %(title)s.%(ext)s"
+                ),
+            },
             "format": "bestaudio/best",
             "postprocessors": [
                 {
@@ -74,7 +80,7 @@ class SoundCloudDownloader:
             "nocheckcertificate": True,
         }
 
-    def download(self, url: str, output_dir: Path, fmt: AudioFormat = "mp3") -> Path:
+    def download(self, url: str, output_dir: Path, fmt: AudioFormat = "mp3") -> list[Path]:
         if fmt != "mp3":
             raise ValueError("Solo se admite descarga directa a MP3")
 
@@ -82,9 +88,21 @@ class SoundCloudDownloader:
         logger.info("Descargando audio", extra={"url": url, "output": str(output_dir)})
         with YoutubeDL(options) as ydl:
             result = ydl.extract_info(url, download=True)
-            filename = Path(ydl.prepare_filename(result))
-            # yt-dlp puede dejar .webm temporal; al aplicar postprocessor queda .mp3
-            final_file = filename.with_suffix(".mp3")
-            if final_file.exists():
-                return final_file
-            return filename
+            return list(self._resolve_targets(result, ydl))
+
+    def _resolve_targets(self, result: Any, ydl: YoutubeDL) -> Iterable[Path]:
+        if isinstance(result, dict) and result.get("entries"):
+            for entry in result.get("entries") or []:
+                if not entry:
+                    continue
+                filename = Path(ydl.prepare_filename(entry))
+                yield self._ensure_mp3_suffix(filename)
+            return
+
+        filename = Path(ydl.prepare_filename(result))
+        yield self._ensure_mp3_suffix(filename)
+
+    @staticmethod
+    def _ensure_mp3_suffix(filename: Path) -> Path:
+        final_file = filename.with_suffix(".mp3")
+        return final_file if final_file.exists() else filename

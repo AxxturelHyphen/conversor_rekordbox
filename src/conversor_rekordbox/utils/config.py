@@ -11,15 +11,15 @@ DEFAULT_PATH.parent.mkdir(parents=True, exist_ok=True)
 @dataclass
 class AppConfig:
     output_dir: str | None = None
-    use_source_dir: bool = True
-    last_format: str = "mp3"
 
     @classmethod
     def load(cls, path: Path = DEFAULT_PATH) -> "AppConfig":
         if not path.exists():
             return cls()
         data = json.loads(path.read_text(encoding="utf-8"))
-        return cls(**data)
+        allowed_keys = {"output_dir"}
+        filtered = {k: v for k, v in data.items() if k in allowed_keys}
+        return cls(**filtered)
 
     def save(self, path: Path = DEFAULT_PATH) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
